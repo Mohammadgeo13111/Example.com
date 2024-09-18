@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palestine Grid to WGS 84 Conversion "Mohammad Hazaa"</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.7.5/proj4.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        #map {
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            margin-bottom: 10px;
+        }
+        .input-row {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Palestine Grid to WGS 84 Conversion "Mohammad Hazaa"</h1>
+
+<!-- Input fields for Palestine Grid coordinates -->
+<div class="input-row">
+    <label for="east">East Coordinate (Palestine Grid): </label>
+    <input type="text" id="east" placeholder="Enter East Coordinate">
+</div>
+
+<div class="input-row">
+    <label for="north">North Coordinate (Palestine Grid): </label>
+    <input type="text" id="north" placeholder="Enter North Coordinate">
+</div>
+
+<!-- Button to trigger the conversion -->
+<button onclick="convertCoordinates()">Convert Coordinates</button>
+
+<!-- New button to calculate the distance -->
+<button onclick="calculateDistance()">Calculate Distance to Current Location</button>
+
+<!-- Display the converted WGS 84 coordinates -->
+<p id="result"></p>
+
+<!-- Map container with a frame -->
+<div id="map" style="height: 400px;"></div>
+
+<!-- Go to button to open Google Maps app -->
+<button onclick="openGoogleMaps()">Go to in Google Maps</button>
+
+<!-- Element to display device's current coordinates and Palestine Grid coordinates -->
+<p id="deviceCoordinates">Tracking location...</p>
+
+<!-- Display the distance -->
+<p id="distanceResult"></p>
+
+<script>
+    var map = L.map('map').setView([31.9539, 35.9106], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    var currentLocationMarker = null;
+    var currentLat, currentLon;
+    var convertedLat, convertedLon;
+    
+    var palestineProjection = "+proj=tmerc +lat_0=31.73445361111111 +lon_0=35.2065 +k=1.000062 +x_0=169636.4 +y_0=1126867.909 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
+
+    function trackLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(function(position) {
+                currentLat = position.coords.latitude;
+                currentLon = position.coords.longitude;
+
+                var wgs84CoordsText = "Current WGS 84 Coordinates: Latitude: " + currentLat + ", Longitude: " + currentLon;
+                var palestineGridCoords = proj4("WGS84", palestineProjection, [currentLon, currentLat]);
+                var palestineCoordsText = "Current Palestine Grid Coordinates: East: " + palestineGridCoords[0] + ", North: " + palestineGridCoords[1];
+
+                document.getElementById("deviceCoordinates").innerHTML = wgs84CoordsText + "<br>" + palestineCoordsText;
+
+                if (currentLocationMarker) {
+                    currentLocationMarker.setLatLng([currentLat, currentLon]);
+                } else {
+                    currentLocationMarker = L.marker([currentLat, currentLon]).addTo(map)
+                        .bindPopup('Your Location: Latitude: ' + currentLat + ', Longitude: ' + currentLon)
+                        .openPopup();
+                }
+
+                map.panTo([currentLat, currentLon]);
+            }, function(error) {
+                alert("Geolocation error: " + error.message);
+            }, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        } else {
+            alert("Geolocation is not supported by this browser.");
+        }
+    }
+
+    trackLocation();
+
+    function convertCoordinates() {
+        var eastCoordinate = parseFloat(document.getElementById("east").value);
+        var northCoordinate = parseFloat(document.getElementById("north").value);
+
+        var wgs84Coordinates = proj4(palestineProjection, "WGS84", [eastCoordinate, northCoordinate]);
+        convertedLat = wgs84Coordinates[1];
+        convertedLon = wgs84Coordinates[0];
+
+        document.getElementById("result").innerHTML = "WGS 84 Coordinates: " + convertedLat + " (latitude), " + convertedLon + " (longitude)";
+
+        map.eachLayer(function (layer) {
+            if (layer instanceof L.Marker && layer !== currentLocationMarker) {
+                map.removeLayer(layer);
+            }
+        });
+
+        L.marker([convertedLat, convertedLon]).addTo(map)
+            .bindPopup('WGS 84 Coordinates: ' + convertedLat + ' (latitude), ' + convertedLon + ' (longitude)')
+            .openPopup();
+
+        map.panTo([convertedLat, convertedLon]);
+    }
+
+    // Haversine formula to calculate distance between two lat/lon points in kilometers
+    function haversine(lat1, lon1, lat2, lon2) {
+        var R = 6371; // Radius of the Earth in kilometers
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLon = (lon2 - lon1) * Math.PI / 180;
+        var a = 
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; // Distance in kilometers
+    }
+
+    // Function to calculate distance between current location and converted coordinates
+    function calculateDistance() {
+        if (typeof currentLat === "undefined" || typeof convertedLat === "undefined") {
+            alert("Please make sure both your current location and the converted coordinates are available.");
+            return;
+        }
+        var distance = haversine(currentLat, currentLon, convertedLat, convertedLon);
+        document.getElementById("distanceResult").innerHTML = "Distance between current location and converted Coordinate: " + distance.toFixed(2) + " km";
+    }
+
+    function openGoogleMaps() {
+        var eastCoordinate = parseFloat(document.getElementById("east").value);
+        var northCoordinate = parseFloat(document.getElementById("north").value);
+        var wgs84Coordinates = proj4(palestineProjection, "WGS84", [eastCoordinate, northCoordinate]);
+        var googleMapsLink = "geo:" + wgs84Coordinates[1] + "," + wgs84Coordinates[0] + "?q=" + wgs84Coordinates[1] + "," + wgs84Coordinates[0];
+        window.location.href = googleMapsLink;
+    }
+</script>
+
+</body>
+</html>
